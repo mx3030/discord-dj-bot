@@ -40,7 +40,6 @@ export class CommandHandler {
             command.textChannel.send("Error: No URL provided.");
             return;
         }
-
         try {
             const playing = this.player.playing();
             const connected = await this.player.join(command.voiceChannel);
@@ -49,13 +48,11 @@ export class CommandHandler {
                 command.textChannel.send("Error: Bot didn't join the channel.");
                 return;
             }
-
             if (playing) {
                 command.textChannel.send("Adding to queue...");
             } else {
                 command.textChannel.send("Starting playback...");
             }
-
             const video = this.player.add(url);
             if (video.videoDetails?.title) {
                 command.textChannel.send(`Queued: ${video.videoDetails.title}`);
@@ -94,7 +91,6 @@ export class CommandHandler {
             command.textChannel.send("Error: No URL provided.");
             return;
         }
-
         try {
             const video = this.player.add(url);
             if (video.videoDetails?.title) {
@@ -195,7 +191,6 @@ export class CommandHandler {
             command.textChannel.send("Error: Volume must be a number between 1 and 100.");
             return;
         }
-
         try {
             this.player.volume(volume);
             command.textChannel.send(`Volume set to ${volume}.`);
