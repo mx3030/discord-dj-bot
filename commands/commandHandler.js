@@ -4,38 +4,29 @@ import { Player } from '../player/player.js';
 export class CommandHandler {
     constructor(player) {
         this.player = player;
+        this.commandsMap = {
+            'play':     (c) => this.handlePlay(c),
+            'system':   (c) => this.handleSystemAudio(c),
+            'add':      (c) => this.handleAdd(c),
+            'queue':    (c) => this.handleQueue(c),
+            'seek':     (c) => this.handleSeek(c),
+            'pause':    (c) => this.handlePause(c),
+            'resume':   (c) => this.handleResume(c),
+            'skip':     (c) => this.handleSkip(c),
+            'stop':     (c) => this.handleStop(c),
+            'volume':   (c) => this.handleVolume(c),
+            'commands': (c) => this.handleCommands(c),
+        }
     }
 
     async handleMessage(data) {
         const command = new CommandProcessor(data);
         try {
-            switch (command.cmd) {
-                case 'play':
-                    await this.handlePlay(command);
-                    break;
-                case 'system':
-                    await this.handleSystemAudio(command);
-                    break;
-                case 'add':
-                    this.handleAdd(command);
-                    break;
-                case 'pause':
-                    this.handlePause(command);
-                    break;
-                case 'resume':
-                    this.handleResume(command);
-                    break;
-                case 'skip':
-                    await this.handleSkip(command);
-                    break;
-                case 'stop':
-                    this.handleStop(command);
-                    break;
-                case 'volume':
-                    this.handleVolume(command);
-                    break;
-                default:
-                    command.textChannel.send(`Unknown command: ${command.cmd}`);
+            const handler = this.commandsMap[command.cmd];
+            if (handler) {
+                await handler(command); // Ensure async handlers are awaited
+            } else {
+                command.textChannel.send(`Error: Unknown command ${command.cmd}`);
             }
         } catch (error) {
             console.error(`Error handling command ${command.cmd}:`, error);
@@ -117,6 +108,39 @@ export class CommandHandler {
         }
     }
 
+    async handleQueue(command) {
+        try {
+            const queue = this.player.get(); // Assuming this returns an array of queued items or URLs
+            if (queue.length === 0) {
+                command.textChannel.send("The queue is empty.");
+            } else {
+                let queueMessage = 'Current queue:\n';
+                queue.forEach((item, index) => {
+                    queueMessage += `${index + 1}. ${item}\n`; // Modify as per your Player class structure
+                });
+                command.textChannel.send(queueMessage);
+            }
+        } catch (error) {
+            console.error('Error while fetching queue:', error);
+            command.textChannel.send("Error: Unable to fetch the current queue.");
+        }
+    }    
+    async handleSeek(command) {
+        // TODO: check if seconds are longer than the song playing at the moment
+        const seekTime = parseInt(command.args[0], 10);
+        if (isNaN(seekTime) || seekTime < 0) {
+            command.textChannel.send("Error: Seek time must be a positive number.");
+            return;
+        }
+        try {
+            await this.player.seek(seekTime);
+            command.textChannel.send(`Skipped to ${seekTime} seconds.`);
+        } catch (error) {
+            console.error('Error while seeking:', error);
+            command.textChannel.send("Error: Unable to seek the track.");
+        }
+    }
+
     handlePause(command) {
         try {
             const paused = this.player.pause();
@@ -179,5 +203,10 @@ export class CommandHandler {
             console.error('Error while setting volume:', error);
             command.textChannel.send("Error: Unable to set volume.");
         }
+    }
+
+    handleCommands(command) {
+        const commandsList = Object.keys(this.commandsMap).join(', ');
+        command.textChannel.send(`Available commands: ${commandsList}`);
     }
 }

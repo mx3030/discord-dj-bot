@@ -1,4 +1,4 @@
-import ytdl from 'ytdl-core-discord';
+import ytdl from 'discord-ytdl-core';
 import { Queue } from './queue.js';
 import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus } from '@discordjs/voice';
 import { spawn } from 'child_process';
@@ -11,7 +11,7 @@ export class Player extends Queue {
         this.connection = null;
         this.audio = createAudioPlayer();
         this.bitstream = null;
-        this.currentVolume = 50;
+        this.currentVolume = 10;
         this.isSkipping = false;
         this.connectionState = 'disconnected';
         this.retryAttempts = 0; // Initialize retry attempts
@@ -44,15 +44,15 @@ export class Player extends Queue {
                 console.log('The bot has been disconnected from the channel.');
                 this.connectionState = 'disconnected';
             });
- 
+
             return true;
         } catch (error) {
             console.error('Error while joining voice channel:', error);
             return false;
         }
     }
-
-    async stream() {
+  
+    async stream(seek=0) {
         try {
             const queue = this.get();
             const item = queue[0];
@@ -61,17 +61,11 @@ export class Player extends Queue {
                 return false;
             }
 
-            this.bitstream = await ytdl(item, { highWaterMark: 1 << 25 });
-
-            //this.bitstream = ytdl(item, {
-                //filter: "audioonly",
-                //fmt: "mp3",
-                //highWaterMark: 1 << 62,
-                //liveBuffer: 1 << 62,
-                //dlChunkSize: 0, //disabling chunking is recommended in discord bot
-                //bitrate: 128,
-                //quality: "lowestaudio",
-            //});
+            this.bitstream = await ytdl(item, { 
+                filter: 'audioonly',
+                opusEncoded: true,
+                seek: seek
+            });
 
             const resource = createAudioResource(this.bitstream, {
                 inputType: 'opus',
@@ -85,7 +79,7 @@ export class Player extends Queue {
             this.audio.play(resource);
             this.connection.subscribe(this.audio);
 
-            this.retryAttempts = 0; // Reset retry attempts on successful stream
+            this.retryAttempts = 0;
 
             return true;
         } catch (error) {
@@ -95,9 +89,22 @@ export class Player extends Queue {
         }
     }
 
+    async seek(seek) {
+        try {
+            this.audio.stop();
+            if (this.bitstream) {
+                this.bitstream?.destroy();
+                this.bitstream = null;  
+            }
+            await this.stream(seek);  
+        } catch (error) {
+            console.error('Error while seeking:', error);
+        }
+    }
+
     async streamSystemAudio() {
         try {
-            
+
             console.log('Starting FFmpeg process to capture system audio and encode to Opus.');
 
             // Start FFmpeg process to capture system audio
@@ -110,18 +117,18 @@ export class Player extends Queue {
                 '-f', 's16le',              // Output format (16-bit little-endian PCM)
                 'pipe:1'                    // Output to stdout
             ]);
-            
+
             //const customTransformStream = new Transform({
                 //highWaterMark: 32 * 1024 * 1024,  
                 //transform(chunk, encoding, callback) {
                     //this.push(chunk);
                     //callback();
-                //}
+                    //}
             //});
             //ffmpeg.stdout.pipe(customTransformStream);
-            
+
             const ffmpegStream = new Readable().wrap(ffmpeg.stdout);
-            
+
             const opusEncoder = new prism.opus.Encoder({ rate: 48000, channels: 2, frameSize: 960 });
 
             this.bitstream = pipeline(
@@ -129,13 +136,13 @@ export class Player extends Queue {
                 opusEncoder,
                 () => {}
             );
- 
+
             const resource = createAudioResource(this.bitstream, {
                 inputType: 'opus',  // Specify the input type as Opus
                 inlineVolume: true,
             });
 
-           if (resource.volume) {
+            if (resource.volume) {
                 resource.volume.setVolume(this.currentVolume / 100);
             }
 
